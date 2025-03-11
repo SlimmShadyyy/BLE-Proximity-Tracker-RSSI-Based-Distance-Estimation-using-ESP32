@@ -1,0 +1,55 @@
+#include <BLEDevice.h>
+
+float estimated_rssi = -50;  // Initial estimated RSSI
+float kalman_gain = 0.5;     // Adjust for better results
+
+// Kalman filter for smoothing RSSI
+float kalmanFilter(float rssi) {
+    estimated_rssi = estimated_rssi + kalman_gain * (rssi - estimated_rssi);
+    return estimated_rssi;
+}
+
+class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
+    void onResult(BLEAdvertisedDevice advertisedDevice) {
+        // Get the Bluetooth address of the device
+        String deviceMAC = advertisedDevice.getAddress().toString();
+        
+        // Get the RSSI value of the device
+        int rssi = advertisedDevice.getRSSI();
+        float filtered_rssi = kalmanFilter(rssi);
+
+        // Distance Estimation Formula
+        float A = -50; // RSSI at 1m (calibration constant, adjust if needed)
+        float n = 2.0; // Environmental factor (path loss exponent, usually between 2-4)
+        float distance = pow(10, (A - filtered_rssi) / (10 * n));
+
+        // If distance is more than 10 meters, limit it to 10 meters
+        if (distance > 10) {
+            distance = 10;
+        }
+
+        // Print the details (device MAC, RSSI, filtered RSSI, and estimated distance)
+        Serial.print("Device MAC Address: ");
+        Serial.print(deviceMAC);  // Display the MAC Address
+        Serial.print(" | Raw RSSI: ");
+        Serial.print(rssi);
+        Serial.print(" | Filtered RSSI: ");
+        Serial.print(filtered_rssi);
+        Serial.print(" | Estimated Distance: ");
+        Serial.print(distance);
+        Serial.println(" meters");
+    }
+};
+
+void setup() {
+    Serial.begin(115200);
+    BLEDevice::init("");  // Initialize BLE device
+    BLEScan* pBLEScan = BLEDevice::getScan();
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+    pBLEScan->setActiveScan(true);
+    pBLEScan->start(5, false);  // Start scanning for devices for 5 seconds
+}
+
+void loop() {
+    // Nothing needs to be done in the loop
+}
